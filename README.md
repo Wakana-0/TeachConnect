@@ -10,7 +10,3 @@
 5.教师端（User）添加微账号系统；
 6.教室端（Server）添加了收到信息时的提醒音效；
 7.教师端（User）添加了发送消息时的音效.
-
-联系我们：Bilibili:Wakana_0	QQ：3822219898
-Creat by Wakana_0
-© 2025 Wakana_0版权所有
