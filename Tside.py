@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
 )
 import socket
 from plyer import notification
-from PyQt6.QtCore import QTimer
+from plyer.platforms.win.notification import WindowsNotification
 import pygame
 import os
 import datetime
@@ -16,8 +16,17 @@ import webbrowser
 
 weekday = datetime.datetime.now().weekday()
 
-html_path = os.path.abspath('.')
-html_path += '\\Update.html'
+html_path = "https://www.github.com/Wakana-0/TeachConnect/releases"
+
+
+def debug_log(message):
+    if DEBUG_MODE:
+        print(f"[DEBUG] {message}")
+
+def log_error(message):
+    debug_log(f"记录错误: {message}")
+    log_file = os.path.join(LOG_PATH, datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S.log"))
+    log_entry = f"[{datetime.datetime.now()}] ERROR: {message}\n"
 
 
 if weekday == 6:
@@ -29,15 +38,12 @@ if weekday == 6:
     )
 
 
-def debug_log(message):
-    if DEBUG_MODE:
-        print(f"[DEBUG] {message}")
-
 
 # 初始化pygame的混音器
 try:
     pygame.mixer.init()
 except Exception as e:
+    log_error(e)
     debug_log('初始化混音器失败',e)
     notification.notify(
         title="发生错误（非致命错误）",
@@ -49,9 +55,10 @@ except Exception as e:
 # 播放提示音
 def play_notification_sound():
     try:
-        sound = pygame.mixer.Sound('sound.mp3') 
+        sound = pygame.mixer.Sound('sound.mp3')
         sound.play()
     except Exception as e:
+        log_error(e)
         print(f"播放音频时发生错误: {e}")
 
 # 设置调试模式，True为启用调试，False为禁用
@@ -94,6 +101,7 @@ def log_message(ip, name, message):
     debug_log(f"记录日志: {log_entry}")
     with open(log_file, "a", encoding="utf-8") as log:
         log.write(log_entry)
+
 
 
 class LoginDialog(QDialog):
@@ -194,9 +202,6 @@ class MessagingApp(QWidget):
         self.send_button = QPushButton("发送")
         self.send_button.clicked.connect(self.send_message)
 
-        # 冷却时间标签
-        self.cooling_label = QLabel("冷却时间:10s")
-        layout.addWidget(self.cooling_label)
 
         layout.addWidget(self.label_name)
         layout.addWidget(self.name_input)
@@ -211,17 +216,8 @@ class MessagingApp(QWidget):
         # 保存当前选中的 IP
         self.selected_ip = None
 
-        # 冷却时间（秒）
-        self.cooling_time = 0
-
-        self.cooling_label.setVisible(False)  # 隐藏冷却时间标签
 
     def send_message(self):
-        # 检查冷却时间
-        if self.cooling_time > 0:
-            QMessageBox.warning(self, "冷却中", f"请等待 {self.cooling_time} 秒后再次发送消息")
-            return
-
         name = self.name_input.currentText().strip()
         ip_with_note = self.ip_input.currentText().strip()
         message = self.message_input.text().strip()
@@ -233,7 +229,8 @@ class MessagingApp(QWidget):
         # 从 "备注 - IP" 格式中分离出备注和 IP
         try:
             note, ip = ip_with_note.split(" - ", 1)
-        except ValueError:
+        except ValueError as e:
+            log_error(e)
             try:
                 note, ip = ip_with_note.split("-", 1)
             except ValueError:
@@ -255,6 +252,9 @@ class MessagingApp(QWidget):
         # 记录日志
         log_message(ip, name, message)
 
+
+
+
         # 发送数据
         data = json.dumps({"name": name, "message": message})
         try:
@@ -263,13 +263,9 @@ class MessagingApp(QWidget):
                 s.sendall(data.encode("utf-8"))
                 play_notification_sound()
                 self.cooling_time = 10
-                self.cooling_label.setVisible(True)
                 QMessageBox.information(self, "发送成功", "消息已成功发送")
-                # 启动冷却计时器
-                self.cooling_time = 10
-                self.update_cooling_label()
-                self.start_timer()
         except Exception as e:
+            log_error(e)
             QMessageBox.critical(self, "发送失败", f"发送失败：请检查网络连接或目标教室未启动程序\n错误信息: {e}")
 
         # 重新加载 IP 并保持之前选中的 IP
@@ -282,28 +278,8 @@ class MessagingApp(QWidget):
             if index != -1:
                 self.ip_input.setCurrentIndex(index)
 
-    def start_timer(self):
-        # 启动一个定时器，每秒更新一次冷却时间
-        self.timer = QTimer(self)
-        self.timer.setInterval(1000)  # 设置定时器间隔为1秒
-        self.timer.timeout.connect(self.decrease_cooling_time)
-        self.timer.start()
 
-    def update_cooling_label(self):
-        if self.cooling_time > 0:
-            self.cooling_label.setText(f"冷却时间: {self.cooling_time}s")
-        else:
-            self.cooling_label.setText(f"冷却时间: 0s")
-            self.cooling_label.setVisible(False)  # 隐藏冷却时间标签
 
-    def decrease_cooling_time(self):
-        if self.cooling_time > 0:
-            self.cooling_time -= 1
-            self.update_cooling_label()
-        else:
-            self.timer.stop()  # 冷却时间结束，停止计时器
-            self.cooling_label.setText(f"冷却时间: 0s")
-            self.cooling_label.setVisible(False)  # 隐藏冷却时间标签
 
     def update_ip_input(self):
         self.ip_input.clear()  # 清空当前的 IP 输入项
