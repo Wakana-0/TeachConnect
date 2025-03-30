@@ -3,19 +3,15 @@ import json
 import os
 import datetime
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QComboBox, QDialog, QFormLayout, QMessageBox
+    QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QComboBox, QDialog, QFormLayout, QMessageBox, QSpinBox
 )
 import socket
 from plyer import notification
 from plyer.platforms.win.notification import WindowsNotification
 import pygame
-import os
-import datetime
 import webbrowser
 
-
 weekday = datetime.datetime.now().weekday()
-
 html_path = "https://www.github.com/Wakana-0/TeachConnect/releases"
 
 
@@ -28,31 +24,25 @@ def log_error(message):
     log_file = os.path.join(LOG_PATH, datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S.log"))
     log_entry = f"[{datetime.datetime.now()}] ERROR: {message}\n"
 
-
 if weekday == 6:
     webbrowser.open(html_path)
     notification.notify(
         title="升级提醒",
-        message="请将 TeachConect 客户端更新到最新版本！",
-        timeout=5  # 通知显示的时长
+        message="请将 TeachConnect 客户端更新到最新版本！",
+        timeout=5
     )
 
-
-
-# 初始化pygame的混音器
 try:
     pygame.mixer.init()
 except Exception as e:
     log_error(e)
-    debug_log('初始化混音器失败',e)
+    debug_log('初始化混音器失败', e)
     notification.notify(
         title="发生错误（非致命错误）",
         message=f"播放音频时发生错误: {e}，尝试连接音频设备以解决错误",
-        timeout=5  # 通知显示的时长
+        timeout=5
     )
 
-
-# 播放提示音
 def play_notification_sound():
     try:
         sound = pygame.mixer.Sound('sound.mp3')
@@ -61,11 +51,9 @@ def play_notification_sound():
         log_error(e)
         print(f"播放音频时发生错误: {e}")
 
-# 设置调试模式，True为启用调试，False为禁用
 DEBUG_MODE = True
 
-# 设置存储路径
-APP_DATA_PATH = os.path.join(os.getenv("APPDATA"), "TConect")
+APP_DATA_PATH = os.path.join(os.getenv("APPDATA"), "TConnect")
 USER_DATA_PATH = os.path.join(APP_DATA_PATH, "User")
 LOG_PATH = os.path.join(APP_DATA_PATH, "log")
 CACHE_PATH = os.path.join(APP_DATA_PATH, "cache")
@@ -73,10 +61,8 @@ IP_STORAGE_FILE = os.path.join(CACHE_PATH, "IPs.json")
 NAME_STORAGE_FILE = os.path.join(CACHE_PATH, "Names.json")
 USER_CREDENTIALS_FILE = os.path.join(USER_DATA_PATH, "UserIFMT.json")
 
-# 确保目录存在
 for path in [USER_DATA_PATH, LOG_PATH, CACHE_PATH]:
     os.makedirs(path, exist_ok=True)
-
 
 def load_recent_data(filepath):
     debug_log(f"加载文件: {filepath}")
@@ -88,20 +74,17 @@ def load_recent_data(filepath):
     debug_log("文件不存在，返回空字典")
     return {}
 
-
 def save_recent_data(filepath, data):
     debug_log(f"保存数据到 {filepath}，数据: {data}")
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
-
-def log_message(ip, name, message):
+def log_message(ip, port, name, message):
     log_file = os.path.join(LOG_PATH, datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S.log"))
-    log_entry = f"[{datetime.datetime.now()}] IP: {ip}, Name: {name}, Message: {message}\n"
+    log_entry = f"[{datetime.datetime.now()}] IP: {ip}, Port: {port}, Name: {name}, Message: {message}\n"
     debug_log(f"记录日志: {log_entry}")
     with open(log_file, "a", encoding="utf-8") as log:
         log.write(log_entry)
-
 
 
 class LoginDialog(QDialog):
@@ -171,16 +154,13 @@ class LoginDialog(QDialog):
             self.register_button.setEnabled(False)  # 禁用注册按钮
             self.register_button.setText("已注册")  # 显示“已注册”文字
 
-
-
 class MessagingApp(QWidget):
     def __init__(self, username):
         super().__init__()
         self.setWindowTitle("消息发送")
-        self.setGeometry(100, 100, 300, 200)
+        self.setGeometry(100, 100, 300, 250)
         self.username = username
 
-        # 加载最近使用的 IP 和名称
         self.recent_ips = load_recent_data(IP_STORAGE_FILE)
         self.recent_names = load_recent_data(NAME_STORAGE_FILE)
 
@@ -194,7 +174,12 @@ class MessagingApp(QWidget):
         self.label_ip = QLabel("服务器 IP:")
         self.ip_input = QComboBox()
         self.ip_input.setEditable(True)
-        self.update_ip_input()  # 初次加载 IP
+        self.update_ip_input()
+
+        self.label_port = QLabel("端口（默认11223，请不要随意改动）:\n如果11223不可行，请改用11224")
+        self.port_input = QSpinBox()
+        self.port_input.setRange(1024, 65535)
+        self.port_input.setValue(11223)
 
         self.label_message = QLabel("消息:")
         self.message_input = QLineEdit()
@@ -202,11 +187,12 @@ class MessagingApp(QWidget):
         self.send_button = QPushButton("发送")
         self.send_button.clicked.connect(self.send_message)
 
-
         layout.addWidget(self.label_name)
         layout.addWidget(self.name_input)
         layout.addWidget(self.label_ip)
         layout.addWidget(self.ip_input)
+        layout.addWidget(self.label_port)
+        layout.addWidget(self.port_input)
         layout.addWidget(self.label_message)
         layout.addWidget(self.message_input)
         layout.addWidget(self.send_button)
@@ -216,84 +202,50 @@ class MessagingApp(QWidget):
         # 保存当前选中的 IP
         self.selected_ip = None
 
-
     def send_message(self):
         name = self.name_input.currentText().strip()
-        ip_with_note = self.ip_input.currentText().strip()
+        ip = self.ip_input.currentText().strip()
+        port = self.port_input.value()
         message = self.message_input.text().strip()
 
-        # 检查必要字段是否填写
-        if not name or not ip_with_note or not message:
+        if not name or not ip or not message:
             return
 
-        # 从 "备注 - IP" 格式中分离出备注和 IP
-        try:
-            note, ip = ip_with_note.split(" - ", 1)
-        except ValueError as e:
-            log_error(e)
-            try:
-                note, ip = ip_with_note.split("-", 1)
-            except ValueError:
-                QMessageBox.warning(self, "错误", "IP 格式无效！")
-                return
+        log_message(ip, port, name, message)
 
-        # 保存当前选中的 IP
-        self.selected_ip = ip_with_note
-
-        # 保存最近使用的名称
-        if name not in self.recent_names:
-            self.recent_names[name] = True
-            save_recent_data(NAME_STORAGE_FILE, self.recent_names)
-
-        # 更新备注，并保存
-        self.recent_ips[ip] = note  # 更新 IP 的备注
-        save_recent_data(IP_STORAGE_FILE, self.recent_ips)
-
-        # 记录日志
-        log_message(ip, name, message)
-
-
-
-
-        # 发送数据
         data = json.dumps({"name": name, "message": message})
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((ip, 11223))
-                s.sendall(data.encode("utf-8"))
-                play_notification_sound()
-                self.cooling_time = 10
-                QMessageBox.information(self, "发送成功", "消息已成功发送")
-        except Exception as e:
-            log_error(e)
-            QMessageBox.critical(self, "发送失败", f"发送失败：请检查网络连接或目标教室未启动程序\n错误信息: {e}")
+        for attempt_port in [port, 11224]:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.connect((ip, attempt_port))
+                    s.sendall(data.encode("utf-8"))
+                    play_notification_sound()
+                    QMessageBox.information(self, "发送成功", "消息已成功发送")
+                    return
+            except Exception as e:
+                log_error(e)
+                if attempt_port == 11224:
+                    QMessageBox.critical(self, "发送失败", f"发送失败：请检查网络连接或目标教室未启动程序\n错误信息: {e}")
 
-        # 重新加载 IP 并保持之前选中的 IP
-        self.recent_ips = load_recent_data(IP_STORAGE_FILE)
-        self.update_ip_input()
-
-        # 恢复之前选中的 IP
-        if self.selected_ip:
-            index = self.ip_input.findText(self.selected_ip)
-            if index != -1:
-                self.ip_input.setCurrentIndex(index)
-
-
-
+            # 恢复之前选中的 IP
+            if self.selected_ip:
+                index = self.ip_input.findText(self.selected_ip)
+                if index != -1:
+                    self.ip_input.setCurrentIndex(index)
 
     def update_ip_input(self):
-        self.ip_input.clear()  # 清空当前的 IP 输入项
-        for ip, note in self.recent_ips.items():
-            self.ip_input.addItem(f"{note} - {ip}", ip)
-
-
-
-
+        self.ip_input.clear()
+        for ip in self.recent_ips.keys():
+            self.ip_input.addItem(ip)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    login = LoginDialog()
-    if login.exec() == QDialog.DialogCode.Accepted:
-        window = MessagingApp(login.result)
+    
+    # 创建登录对话框
+    login_dialog = LoginDialog()
+    if login_dialog.exec() == QDialog.DialogCode.Accepted:
+        username = login_dialog.result
+        # 登录成功后显示消息发送窗口
+        window = MessagingApp(username)
         window.show()
         sys.exit(app.exec())

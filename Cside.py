@@ -5,6 +5,7 @@ from plyer import notification
 from plyer.platforms.win.notification import WindowsNotification
 import pygame
 import datetime
+import sys
 
 # 设置存储路径
 APP_DATA_PATH = os.path.join(os.getenv("APPDATA"), "TConect")
@@ -14,9 +15,12 @@ CACHE_PATH = os.path.join(APP_DATA_PATH, "cache")
 IP_STORAGE_FILE = os.path.join(CACHE_PATH, "IPs.json")
 NAME_STORAGE_FILE = os.path.join(CACHE_PATH, "Names.json")
 USER_CREDENTIALS_FILE = os.path.join(USER_DATA_PATH, "UserIFMT.json")
+PORT = os.path.join(CACHE_PATH, "port_settings.json")
+
 
 
 DEBUG_MODE = True
+
 
 def debug_log(message):
     if DEBUG_MODE:
@@ -35,8 +39,12 @@ def log_error(message):
     log_file = os.path.join(LOG_PATH, datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S.log"))
     log_entry = f"[{datetime.datetime.now()}] ERROR: {message}\n"
 
+
+try:
 # 初始化pygame的混音器
-pygame.mixer.init()
+    pygame.mixer.init()
+except Exception as e:
+    log_error(e)
 
 # 播放提示音
 def play_notification_sound():
@@ -59,8 +67,29 @@ def save_to_system_log(name, message):
         f.write(f"{name}: {message}\n")
 
 
+def get_port_settings():
+    try:
+        debug_log("读取端口设置文件")
+        with open(PORT, "a", encoding="utf-8") as f:
+            data = json.load(f)
+            return data
+    except FileNotFoundError:
+        return {"port": 11223}
+        debug_log("创建端口设置文件")
+        with open(PORT, "w", encoding="utf-8") as f:
+            json.dump({"port": 11223}, f)
+    except Exception as e:
+        log_error(e)
+        debug_log("读取端口设置文件失败")
+        return {"port": 11223}
+
+
 def start_server():
-    ipdrss = socket.gethostbyname(socket.gethostname())
+    try:
+        ipdrss = socket.gethostbyname(socket.gethostname())
+    except Exception as e:
+        log_error(e)
+        ipdrss = "获取IP失败"
     # 弹出提示通知
     notification.notify(
         title="提示 | Notification",
